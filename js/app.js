@@ -1,11 +1,9 @@
 'use strict';
 
 /*
- * 圖片日曆 — 最小可用版本（階段 6）
+ * 圖片日曆 — 最小可用版本（階段 6）+ 暗色模式（SVG 圖示）
  * 依賴：store.js（IndexedDB + 圖片 Blob）、query.js（範圍查詢）、
  *       lib/recurrence.js（重複事件展開，可選）
- *
- * 本檔案只做 UI 與事件綁定，不直接碰 IndexedDB。
  */
 
 import { Store } from './store.js';
@@ -14,15 +12,17 @@ import { Query } from './query.js';
 const $ = id => document.getElementById(id);
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const THEME_KEY = 'photo-calendar-theme';
 
 let currentDate = new Date();
 let eventsInRange = [];
 let editingEventId = null;
-let pendingImageBlob = null;   // 表單中尚未儲存的圖片
-let imageUrlCache = new Map(); // imageId -> objectURL
+let pendingImageBlob = null;
+let imageUrlCache = new Map();
 
 /* ========================= 啟動 ========================= */
 (async () => {
+  initTheme();
   await Store.open();
   $('weekdayRow').innerHTML = WEEKDAYS.map(d => `<div>${d}</div>`).join('');
   bindNav();
@@ -35,6 +35,36 @@ let imageUrlCache = new Map(); // imageId -> objectURL
       初始化失敗，請重新整理。詳見 console。
     </div>`);
 });
+
+/* ========================= 主題 ========================= */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  // 圖示由 CSS 依 data-theme 自動切換；這裡只更新 aria-label
+  const btn = $('btnTheme');
+  if (btn) {
+    btn.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
+  }
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
+
+  $('btnTheme')?.addEventListener('click', () => {
+    const curr = document.documentElement.getAttribute('data-theme');
+    const next = curr === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem(THEME_KEY, next);
+  });
+
+  // 系統偏好改變時，僅在無手動選擇時跟隨
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!localStorage.getItem(THEME_KEY)) {
+      applyTheme(e.matches ? 'dark' : 'light');
+    }
+  });
+}
 
 /* ========================= 導覽 ========================= */
 function bindNav() {
@@ -49,7 +79,7 @@ async function refresh() {
   const gridStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   gridStart.setDate(gridStart.getDate() - gridStart.getDay());
   const gridEnd = new Date(gridStart);
-  gridEnd.setDate(gridEnd.getDate() + 41); // 6 週
+  gridEnd.setDate(gridEnd.getDate() + 41);
   gridEnd.setHours(23, 59, 59, 999);
 
   eventsInRange = await Query.getEventsInRange(gridStart, gridEnd);
@@ -73,17 +103,18 @@ async function renderMonth(gridStart, gridEnd) {
 
   const cursor = new Date(gridStart);
   for (let i = 0; i < 42; i++) {
+    const cellDate = new Date(cursor);   // 快照，避免閉包全部指向同一天
     const cell = document.createElement('div');
     cell.className = 'day-cell';
-    if (cursor.getMonth() !== currentDate.getMonth()) cell.classList.add('other-month');
-    if (isToday(cursor)) cell.classList.add('today');
+    if (cellDate.getMonth() !== currentDate.getMonth()) cell.classList.add('other-month');
+    if (isToday(cellDate)) cell.classList.add('today');
 
     const num = document.createElement('div');
     num.className = 'day-num';
-    num.textContent = cursor.getDate();
+    num.textContent = cellDate.getDate();
     cell.appendChild(num);
 
-    const dayEvents = byDay.get(dateKey(cursor)) || [];
+    const dayEvents = byDay.get(dateKey(cellDate)) || [];
     for (const ev of dayEvents.slice(0, 3)) {
       cell.appendChild(await createEventChip(ev));
     }
@@ -94,7 +125,7 @@ async function renderMonth(gridStart, gridEnd) {
       more.textContent = `+${dayEvents.length - 3} 更多`;
       cell.appendChild(more);
     }
-    const cellDate = new Date(cursor);   // ← 先快照
+
     cell.addEventListener('click', () => openNewEvent(cellDate));
     grid.appendChild(cell);
     cursor.setDate(cursor.getDate() + 1);
@@ -114,6 +145,11 @@ async function createEventChip(ev) {
       img.src = url;
       img.alt = '';
       chip.appendChild(img);
+      img.addEventListener('click', async e => {
+        e.stopPropagation();
+        const full = await getImageUrl(ev.imageId);
+        if (full) openLightbox(full);
+      });
     }
   }
 
@@ -125,13 +161,6 @@ async function createEventChip(ev) {
   chip.addEventListener('click', e => {
     e.stopPropagation();
     openEditEvent(ev.id);
-  });
-
-  // 有圖片的點縮圖開燈箱
-  chip.querySelector('img')?.addEventListener('click', async e => {
-    e.stopPropagation();
-    const url = await getImageUrl(ev.imageId);
-    if (url) openLightbox(url);
   });
 
   return chip;
@@ -164,7 +193,6 @@ function bindDialog() {
   });
   $('eventForm').addEventListener('submit', e => e.preventDefault());
 
-  // 燈箱
   $('btnCloseLightbox').addEventListener('click', () => $('lightbox').close());
   $('lightbox').addEventListener('click', e => {
     if (e.target === $('lightbox')) $('lightbox').close();
@@ -244,7 +272,6 @@ async function saveEvent() {
       revokeImageUrl(oldEv.imageId);
     }
   } else if (oldEv?.imageId && $('imagePreview').hidden) {
-    // 使用者按了「移除圖片」
     await Store.deleteImage(oldEv.imageId);
     revokeImageUrl(oldEv.imageId);
     imageId = null;
@@ -259,7 +286,7 @@ async function saveEvent() {
     description: $('evDescription').value.trim(),
     imageId,
     recurrence: oldEv?.recurrence || '',
-    created: oldEv?.created,
+    created: oldEv?.created,   // 保留原始建立時間
   };
 
   await Store.saveEvent(ev);

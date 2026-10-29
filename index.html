@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>圖片日曆</title>
+  <!-- 首帧前套用主题，避免闪烁。逻辑与 app.js 的 initTheme 保持一致 -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('photo-calendar-theme');
+      var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,6 +20,26 @@
     <h1 id="navTitle" class="nav-title">載入中…</h1>
     <button id="btnNext" class="nav-btn" aria-label="下個月">›</button>
     <button id="btnToday" class="today-btn">今天</button>
+    <button id="btnTheme" class="nav-btn theme-btn" aria-label="切換為深色模式">
+      <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>
+      </svg>
+      <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2"/>
+        <path d="M12 20v2"/>
+        <path d="m4.93 4.93 1.41 1.41"/>
+        <path d="m17.66 17.66 1.41 1.41"/>
+        <path d="M2 12h2"/>
+        <path d="M20 12h2"/>
+        <path d="m6.34 17.66-1.41 1.41"/>
+        <path d="m19.07 4.93-1.41 1.41"/>
+      </svg>
+    </button>
   </header>
 
   <main class="calendar-wrap">
@@ -19,7 +47,6 @@
     <div class="month-grid" id="monthGrid"></div>
   </main>
 
-  <!-- 事件表單（dialog 原生元件，無需框架） -->
   <dialog id="eventDialog" class="event-dialog">
     <form method="dialog" id="eventForm">
       <h2 id="eventDialogTitle">新增事件</h2>
@@ -74,7 +101,6 @@
     </form>
   </dialog>
 
-  <!-- 圖片燈箱 -->
   <dialog id="lightbox" class="lightbox">
     <img id="lightboxImg" alt="" />
     <button type="button" id="btnCloseLightbox" class="lightbox-close" aria-label="關閉">×</button>
