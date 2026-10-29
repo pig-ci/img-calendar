@@ -31,6 +31,12 @@
   
   * { box-sizing: border-box; }
   
+  /* ===== 關鍵修復：確保 hidden 屬性永遠有效 =====
+   * .image-preview 的 display:flex 與 .time-fields 的 display:grid
+   * 會覆蓋 UA 樣式的 [hidden] { display: none }，導致 JS 設 hidden 無效。
+   * 用 !important 保證 [hidden] 勝出。 */
+  [hidden] { display: none !important; }
+  
   html, body {
     margin: 0;
     padding: 0;
@@ -406,7 +412,7 @@
   }
   .dialog-actions .ghost:hover { background: var(--hover); }
   
-  /* ===== 燈箱：全螢幕 + 可縮放 + 可滾動 ===== */
+  /* ===== 燈箱 ===== */
   .lightbox {
     position: fixed;
     inset: 0;
@@ -422,7 +428,6 @@
   }
   .lightbox::backdrop { background: rgba(0, 0, 0, 0.85); }
   
-  /* 滾動容器：fit 狀態用 max-width 留邊，zoomed 時被 img 的顯式尺寸撐開 */
   .lightbox-scroll {
     position: absolute;
     inset: 0;
@@ -443,7 +448,6 @@
     -webkit-user-drag: none;
   }
   
-  /* zoomed 時 max-width 解除；實際尺寸由 JS 設定 style.width/height */
   .lightbox-scroll img.zoomed {
     max-width: none;
     max-height: none;

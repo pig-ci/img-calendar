@@ -3,7 +3,8 @@
 /*
  * 圖片日曆 — 最小可用版本（階段 6）
  *   + 暗色模式、自訂捲軸、自訂檔案按鈕、預覽圖可點擊
- *   + 燈箱：點擊圖片以 2.5 倍放大；放大後可滾動／滾輪查看
+ *   + 燈箱點擊放大 2.5 倍；放大後可滾動／滾輪查看
+ *   + 修復：移除圖片後預覽確實消失、不再開啟空白燈箱
  * 依賴：store.js、query.js、lib/recurrence.js（可選）
  */
 
@@ -15,7 +16,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const THEME_KEY = 'photo-calendar-theme';
 const THEME_TRANSITION_MS = 350;
-const LIGHTBOX_ZOOM_FACTOR = 2.5;   // 點擊放大的倍率（相對 fit 尺寸）
+const LIGHTBOX_ZOOM_FACTOR = 2.5;
 
 let currentDate = new Date();
 let eventsInRange = [];
@@ -198,9 +199,11 @@ function bindDialog() {
     updateFileTriggerText();
   });
 
+  // 移除圖片：清空 src + 隱藏預覽 + 釋放臨時 URL
   $('btnRemoveImage').addEventListener('click', () => {
     pendingImageBlob = null;
     $('evImage').value = '';
+    $('imagePreviewImg').removeAttribute('src');
     $('imagePreview').hidden = true;
     if (previewObjectUrl) {
       URL.revokeObjectURL(previewObjectUrl);
@@ -209,8 +212,9 @@ function bindDialog() {
     updateFileTriggerText();
   });
 
+  // 點擊預覽圖放大：用 getAttribute 讀取，避免 src 為空時誤觸
   $('imagePreviewImg').addEventListener('click', () => {
-    const src = $('imagePreviewImg').src;
+    const src = $('imagePreviewImg').getAttribute('src');
     if (src) openLightbox(src);
   });
 
@@ -231,13 +235,11 @@ function bindDialog() {
     if (e.target === $('lightboxScroll')) closeLightbox();
   });
 
-  // 點圖片切換放大 / 縮小：讀取 fit 尺寸後設為 2.5 倍，保證「實際放大」
   $('lightboxImg').addEventListener('click', e => {
     e.stopPropagation();
     toggleLightboxZoom();
   });
 
-  // 關閉時重置 zoom 與滾動位置
   $('lightbox').addEventListener('close', () => {
     resetLightboxZoom();
   });
@@ -254,6 +256,7 @@ function openNewEvent(date) {
   $('evAllDay').checked = true;
   $('timeFields').hidden = true;
   $('imagePreview').hidden = true;
+  $('imagePreviewImg').removeAttribute('src');
   if (previewObjectUrl) {
     URL.revokeObjectURL(previewObjectUrl);
     previewObjectUrl = null;
@@ -284,10 +287,13 @@ async function openEditEvent(id) {
     URL.revokeObjectURL(previewObjectUrl);
     previewObjectUrl = null;
   }
-  $('imagePreview').hidden = !ev.imageId;
   if (ev.imageId) {
     const url = await getImageUrl(ev.imageId);
     showImagePreview(url);
+  } else {
+    // 無圖片：清掉舊 src 並隱藏，避免殘留
+    $('imagePreviewImg').removeAttribute('src');
+    $('imagePreview').hidden = true;
   }
   updateFileTriggerText();
   $('eventDialog').showModal();
@@ -383,6 +389,7 @@ async function deleteEvent(id) {
 
 /* ========================= 燈箱 ========================= */
 function openLightbox(url) {
+  if (!url) return;   // 空 src 不開燈箱
   const img = $('lightboxImg');
   img.src = url;
   resetLightboxZoom();
@@ -393,12 +400,6 @@ function closeLightbox() {
   $('lightbox').close();
 }
 
-/**
- * 切換燈箱圖片縮放。
- * 放大時讀取「fit 後」的 clientWidth/Height，設為 2.5 倍並寫進 style，
- * 保證無論圖片天然尺寸多大或多小，視覺上都確實變大。
- * 縮小時清掉 inline style，讓 CSS 的 max-width/max-height 重新接管。
- */
 function toggleLightboxZoom() {
   const img = $('lightboxImg');
   const scroll = $('lightboxScroll');
@@ -410,11 +411,9 @@ function toggleLightboxZoom() {
     return;
   }
 
-  // 讀取 fit 狀態下的實際渲染尺寸（此刻 inline style 為空，CSS max-* 生效）
   const fitW = img.clientWidth;
   const fitH = img.clientHeight;
 
-  // 若圖片尚未載入完成，clientWidth 會是 0；監聽 load 後再試一次
   if (!fitW || !fitH) {
     img.addEventListener('load', () => toggleLightboxZoom(), { once: true });
     return;
