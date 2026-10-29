@@ -1,7 +1,9 @@
 'use strict';
 
 /*
- * 圖片日曆 — 最小可用版本（階段 6）+ 暗色模式（SVG 圖示 + 全域同步過渡）
+ * 圖片日曆 — 最小可用版本（階段 6）
+ *   + 暗色模式（SVG 圖示 + 全域同步過渡）
+ *   + 自訂捲軸、自訂檔案選擇按鈕、編輯時預覽圖可點擊放大
  * 依賴：store.js（IndexedDB + 圖片 Blob）、query.js（範圍查詢）、
  *       lib/recurrence.js（重複事件展開，可選）
  */
@@ -13,14 +15,16 @@ const $ = id => document.getElementById(id);
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const THEME_KEY = 'photo-calendar-theme';
-const THEME_TRANSITION_MS = 350; // 略大於 CSS 的 0.3s，確保過渡結束才移除 class
+const THEME_TRANSITION_MS = 350;
 
 let currentDate = new Date();
 let eventsInRange = [];
 let editingEventId = null;
 let pendingImageBlob = null;
+let currentEventHasImage = false; // 正在編輯的事件原本是否有圖片
 let imageUrlCache = new Map();
 let themeTransitionTimer = null;
+let previewObjectUrl = null;      // 追蹤目前預覽用的臨時 object URL
 
 /* ========================= 啟動 ========================= */
 (async () => {
@@ -39,13 +43,6 @@ let themeTransitionTimer = null;
 });
 
 /* ========================= 主題 ========================= */
-/**
- * 套用主題。
- * @param {'light'|'dark'} theme
- * @param {{ animate?: boolean }} options
- *   animate = true 時，給 <html> 加 .theme-transition，讓所有元素同步過渡；
- *   過渡結束後自動移除，避免影響日常 hover 效能。
- */
 function applyTheme(theme, { animate = true } = {}) {
   const root = document.documentElement;
   const changing = root.getAttribute('data-theme') !== theme;
@@ -69,7 +66,6 @@ function applyTheme(theme, { animate = true } = {}) {
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  // 首次載入不做過渡：head 內聯腳本已設好 data-theme，避免一進頁面就閃
   applyTheme(saved || (prefersDark ? 'dark' : 'light'), { animate: false });
 
   $('btnTheme')?.addEventListener('click', () => {
@@ -79,7 +75,6 @@ function initTheme() {
     localStorage.setItem(THEME_KEY, next);
   });
 
-  // 系統偏好改變時，僅在無手動選擇時跟隨
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
     if (!localStorage.getItem(THEME_KEY)) {
       applyTheme(e.matches ? 'dark' : 'light');
@@ -190,20 +185,36 @@ async function createEventChip(ev) {
 /* ========================= 事件對話框 ========================= */
 function bindDialog() {
   const dlg = $('eventDialog');
+
   $('evAllDay').addEventListener('change', e => {
     $('timeFields').hidden = e.target.checked;
   });
+
   $('evImage').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
     pendingImageBlob = await Store.makeThumbnail(file, 800);
-    showImagePreview(URL.createObjectURL(pendingImageBlob));
+    showImagePreview(URL.createObjectURL(pendingImageBlob), { isTemp: true });
+    updateFileTriggerText();
   });
+
   $('btnRemoveImage').addEventListener('click', () => {
     pendingImageBlob = null;
     $('evImage').value = '';
     $('imagePreview').hidden = true;
+    if (previewObjectUrl) {
+      URL.revokeObjectURL(previewObjectUrl);
+      previewObjectUrl = null;
+    }
+    updateFileTriggerText();
   });
+
+  // 點擊預覽圖放大（新增時的暫存圖、編輯時的既有圖都適用）
+  $('imagePreviewImg').addEventListener('click', () => {
+    const src = $('imagePreviewImg').src;
+    if (src) openLightbox(src);
+  });
+
   $('btnCancelEvent').addEventListener('click', () => dlg.close());
   $('btnSaveEvent').addEventListener('click', e => {
     e.preventDefault();
@@ -223,6 +234,7 @@ function bindDialog() {
 function openNewEvent(date) {
   editingEventId = null;
   pendingImageBlob = null;
+  currentEventHasImage = false;
   $('eventDialogTitle').textContent = '新增事件';
   $('btnDeleteEvent').hidden = true;
   $('eventForm').reset();
@@ -230,6 +242,11 @@ function openNewEvent(date) {
   $('evAllDay').checked = true;
   $('timeFields').hidden = true;
   $('imagePreview').hidden = true;
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
+  updateFileTriggerText();
   $('eventDialog').showModal();
 }
 
@@ -238,6 +255,7 @@ async function openEditEvent(id) {
   if (!ev) return;
   editingEventId = id;
   pendingImageBlob = null;
+  currentEventHasImage = !!ev.imageId;
   $('eventDialogTitle').textContent = '編輯事件';
   $('btnDeleteEvent').hidden = false;
   $('evTitle').value = ev.title || '';
@@ -250,17 +268,40 @@ async function openEditEvent(id) {
   }
   $('evDescription').value = ev.description || '';
   $('evImage').value = '';
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
   $('imagePreview').hidden = !ev.imageId;
   if (ev.imageId) {
     const url = await getImageUrl(ev.imageId);
     showImagePreview(url);
   }
+  updateFileTriggerText();
   $('eventDialog').showModal();
 }
 
-function showImagePreview(url) {
+function showImagePreview(url, { isTemp = false } = {}) {
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
   $('imagePreviewImg').src = url;
   $('imagePreview').hidden = false;
+  if (isTemp) previewObjectUrl = url;
+}
+
+function updateFileTriggerText() {
+  const text = $('fileTriggerText');
+  if (!text) return;
+  if (pendingImageBlob) {
+    const file = $('evImage').files[0];
+    text.textContent = file ? `已選擇：${file.name}` : '已選擇圖片';
+  } else if (currentEventHasImage) {
+    text.textContent = '更換圖片';
+  } else {
+    text.textContent = '選擇圖片';
+  }
 }
 
 async function saveEvent() {
@@ -307,7 +348,7 @@ async function saveEvent() {
     description: $('evDescription').value.trim(),
     imageId,
     recurrence: oldEv?.recurrence || '',
-    created: oldEv?.created,   // 保留原始建立時間
+    created: oldEv?.created,
   };
 
   await Store.saveEvent(ev);
