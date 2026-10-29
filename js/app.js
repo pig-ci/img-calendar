@@ -2,10 +2,9 @@
 
 /*
  * 圖片日曆 — 最小可用版本（階段 6）
- *   + 暗色模式（SVG 圖示 + 全域同步過渡）
- *   + 自訂捲軸、自訂檔案選擇按鈕、編輯時預覽圖可點擊放大
- * 依賴：store.js（IndexedDB + 圖片 Blob）、query.js（範圍查詢）、
- *       lib/recurrence.js（重複事件展開，可選）
+ *   + 暗色模式、自訂捲軸、自訂檔案按鈕、預覽圖可點擊
+ *   + 燈箱：點擊圖片以 2.5 倍放大；放大後可滾動／滾輪查看
+ * 依賴：store.js、query.js、lib/recurrence.js（可選）
  */
 
 import { Store } from './store.js';
@@ -16,15 +15,16 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const THEME_KEY = 'photo-calendar-theme';
 const THEME_TRANSITION_MS = 350;
+const LIGHTBOX_ZOOM_FACTOR = 2.5;   // 點擊放大的倍率（相對 fit 尺寸）
 
 let currentDate = new Date();
 let eventsInRange = [];
 let editingEventId = null;
 let pendingImageBlob = null;
-let currentEventHasImage = false; // 正在編輯的事件原本是否有圖片
+let currentEventHasImage = false;
 let imageUrlCache = new Map();
 let themeTransitionTimer = null;
-let previewObjectUrl = null;      // 追蹤目前預覽用的臨時 object URL
+let previewObjectUrl = null;
 
 /* ========================= 啟動 ========================= */
 (async () => {
@@ -119,7 +119,7 @@ async function renderMonth(gridStart, gridEnd) {
 
   const cursor = new Date(gridStart);
   for (let i = 0; i < 42; i++) {
-    const cellDate = new Date(cursor);   // 快照，避免閉包全部指向同一天
+    const cellDate = new Date(cursor);
     const cell = document.createElement('div');
     cell.className = 'day-cell';
     if (cellDate.getMonth() !== currentDate.getMonth()) cell.classList.add('other-month');
@@ -209,7 +209,6 @@ function bindDialog() {
     updateFileTriggerText();
   });
 
-  // 點擊預覽圖放大（新增時的暫存圖、編輯時的既有圖都適用）
   $('imagePreviewImg').addEventListener('click', () => {
     const src = $('imagePreviewImg').src;
     if (src) openLightbox(src);
@@ -225,9 +224,22 @@ function bindDialog() {
   });
   $('eventForm').addEventListener('submit', e => e.preventDefault());
 
-  $('btnCloseLightbox').addEventListener('click', () => $('lightbox').close());
-  $('lightbox').addEventListener('click', e => {
-    if (e.target === $('lightbox')) $('lightbox').close();
+  /* ---- 燈箱 ---- */
+  $('btnCloseLightbox').addEventListener('click', closeLightbox);
+
+  $('lightboxScroll').addEventListener('click', e => {
+    if (e.target === $('lightboxScroll')) closeLightbox();
+  });
+
+  // 點圖片切換放大 / 縮小：讀取 fit 尺寸後設為 2.5 倍，保證「實際放大」
+  $('lightboxImg').addEventListener('click', e => {
+    e.stopPropagation();
+    toggleLightboxZoom();
+  });
+
+  // 關閉時重置 zoom 與滾動位置
+  $('lightbox').addEventListener('close', () => {
+    resetLightboxZoom();
   });
 }
 
@@ -371,8 +383,54 @@ async function deleteEvent(id) {
 
 /* ========================= 燈箱 ========================= */
 function openLightbox(url) {
-  $('lightboxImg').src = url;
+  const img = $('lightboxImg');
+  img.src = url;
+  resetLightboxZoom();
   $('lightbox').showModal();
+}
+
+function closeLightbox() {
+  $('lightbox').close();
+}
+
+/**
+ * 切換燈箱圖片縮放。
+ * 放大時讀取「fit 後」的 clientWidth/Height，設為 2.5 倍並寫進 style，
+ * 保證無論圖片天然尺寸多大或多小，視覺上都確實變大。
+ * 縮小時清掉 inline style，讓 CSS 的 max-width/max-height 重新接管。
+ */
+function toggleLightboxZoom() {
+  const img = $('lightboxImg');
+  const scroll = $('lightboxScroll');
+
+  if (img.classList.contains('zoomed')) {
+    resetLightboxZoom();
+    scroll.scrollTop = 0;
+    scroll.scrollLeft = 0;
+    return;
+  }
+
+  // 讀取 fit 狀態下的實際渲染尺寸（此刻 inline style 為空，CSS max-* 生效）
+  const fitW = img.clientWidth;
+  const fitH = img.clientHeight;
+
+  // 若圖片尚未載入完成，clientWidth 會是 0；監聽 load 後再試一次
+  if (!fitW || !fitH) {
+    img.addEventListener('load', () => toggleLightboxZoom(), { once: true });
+    return;
+  }
+
+  img.classList.add('zoomed');
+  img.style.width = Math.round(fitW * LIGHTBOX_ZOOM_FACTOR) + 'px';
+  img.style.height = Math.round(fitH * LIGHTBOX_ZOOM_FACTOR) + 'px';
+}
+
+function resetLightboxZoom() {
+  const img = $('lightboxImg');
+  if (!img) return;
+  img.classList.remove('zoomed');
+  img.style.width = '';
+  img.style.height = '';
 }
 
 /* ========================= 圖片 URL 快取 ========================= */

@@ -40,25 +40,15 @@
     font-size: 14px;
   }
   
-  /* ===== 自訂捲軸 =====
-   * 優先使用標準屬性（原生合成層，效能最佳）：
-   *   - Firefox 全版本
-   *   - Chrome / Edge 121+
-   * Safari 等不支援標準屬性的瀏覽器，用 @supports not 包住 webkit fallback，
-   * 兩者互斥，不會互相覆蓋，也不會拖慢已支援標準屬性的瀏覽器。 */
+  /* ===== 自訂捲軸 ===== */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
   }
   
   @supports not (scrollbar-color: auto) {
-    ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
-    }
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb);
       border-radius: 999px;
@@ -69,9 +59,7 @@
       background: var(--scrollbar-thumb-hover);
       background-clip: padding-box;
     }
-    ::-webkit-scrollbar-corner {
-      background: transparent;
-    }
+    ::-webkit-scrollbar-corner { background: transparent; }
   }
   
   /* ===== 主題切換：全域同步過渡 ===== */
@@ -132,11 +120,7 @@
     justify-content: center;
     padding: 0;
   }
-  .theme-btn svg {
-    width: 18px;
-    height: 18px;
-    display: block;
-  }
+  .theme-btn svg { width: 18px; height: 18px; display: block; }
   .theme-btn .icon-sun { display: none; }
   html[data-theme="dark"] .theme-btn .icon-moon { display: none; }
   html[data-theme="dark"] .theme-btn .icon-sun  { display: block; }
@@ -216,7 +200,6 @@
     align-self: flex-end;
   }
   
-  /* 事件條 */
   .event-chip {
     display: flex;
     align-items: center;
@@ -312,7 +295,6 @@
   
   /* ===== 自訂檔案選擇按鈕 ===== */
   .file-input {
-    /* sr-only：保留在 a11y tree 與 tab 順序中，但視覺隱藏 */
     position: absolute;
     width: 1px;
     height: 1px;
@@ -345,7 +327,6 @@
   }
   .file-trigger:active { transform: translateY(1px); }
   
-  /* 鍵盤 focus 到隱藏 input 時，給 label 顯示焦點環 */
   .file-input:focus-visible + .file-trigger {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -425,31 +406,68 @@
   }
   .dialog-actions .ghost:hover { background: var(--hover); }
   
-  /* ===== 燈箱 ===== */
+  /* ===== 燈箱：全螢幕 + 可縮放 + 可滾動 ===== */
   .lightbox {
-    border: none;
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0;
     padding: 0;
+    border: none;
     background: transparent;
-    max-width: 90vw;
-    max-height: 90vh;
+    overflow: hidden;
   }
   .lightbox::backdrop { background: rgba(0, 0, 0, 0.85); }
-  .lightbox img {
-    max-width: 90vw;
-    max-height: 85vh;
-    display: block;
-    border-radius: 6px;
+  
+  /* 滾動容器：fit 狀態用 max-width 留邊，zoomed 時被 img 的顯式尺寸撐開 */
+  .lightbox-scroll {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    overflow: auto;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
   }
+  
+  .lightbox-scroll img {
+    margin: auto;
+    display: block;
+    max-width: calc(100% - 48px);
+    max-height: calc(100% - 48px);
+    border-radius: 6px;
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  
+  /* zoomed 時 max-width 解除；實際尺寸由 JS 設定 style.width/height */
+  .lightbox-scroll img.zoomed {
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    cursor: zoom-out;
+  }
+  
   .lightbox-close {
     position: absolute;
-    top: -12px;
-    right: -12px;
-    width: 32px;
-    height: 32px;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: none;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
     color: #333;
-    font-size: 20px;
+    font-size: 22px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
+  .lightbox-close:hover { background: #fff; }

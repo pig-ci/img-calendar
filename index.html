@@ -82,7 +82,6 @@
         <textarea id="evDescription" rows="2" maxlength="500"></textarea>
       </label>
 
-      <!-- 圖片：原生 file input 隱藏，由 .file-trigger 觸發 -->
       <div class="field">
         <span>圖片</span>
         <input type="file" id="evImage" accept="image/*" class="file-input" />
@@ -112,8 +111,11 @@
     </form>
   </dialog>
 
+  <!-- 燈箱：可縮放 + 可滾動 -->
   <dialog id="lightbox" class="lightbox">
-    <img id="lightboxImg" alt="" />
+    <div class="lightbox-scroll" id="lightboxScroll">
+      <img id="lightboxImg" alt="" />
+    </div>
     <button type="button" id="btnCloseLightbox" class="lightbox-close" aria-label="關閉">×</button>
   </dialog>
 
