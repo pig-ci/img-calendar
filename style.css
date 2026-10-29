@@ -11,6 +11,8 @@
     --danger: #dc2626;
     --radius: 8px;
     --cell-min: 96px;
+    --scrollbar-thumb: #c9c9c4;
+    --scrollbar-thumb-hover: #a8a8a2;
   }
   
   html[data-theme="dark"] {
@@ -23,6 +25,8 @@
     --text-muted: #9a9a94;
     --accent: #4a9eff;
     --danger: #f87171;
+    --scrollbar-thumb: #4a4a44;
+    --scrollbar-thumb-hover: #5f5f58;
   }
   
   * { box-sizing: border-box; }
@@ -34,7 +38,67 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
     font-size: 14px;
-    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  
+  /* ===== 自訂捲軸 =====
+   * 優先使用標準屬性（原生合成層，效能最佳）：
+   *   - Firefox 全版本
+   *   - Chrome / Edge 121+
+   * Safari 等不支援標準屬性的瀏覽器，用 @supports not 包住 webkit fallback，
+   * 兩者互斥，不會互相覆蓋，也不會拖慢已支援標準屬性的瀏覽器。 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 999px;
+      /* 用 border + background-clip 讓滑塊視覺上比軌道窄，做出內縮效果 */
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+  }
+  
+  /* ===== 主題切換：全域同步過渡 ===== */
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after,
+  html.theme-transition *::backdrop {
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
+      border-color 0.3s ease,
+      fill 0.3s ease,
+      stroke 0.3s ease,
+      box-shadow 0.3s ease,
+      outline-color 0.3s ease !important;
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-transition,
+    html.theme-transition *,
+    html.theme-transition *::before,
+    html.theme-transition *::after,
+    html.theme-transition *::backdrop {
+      transition: none !important;
+    }
   }
   
   /* ===== 標頭 ===== */
@@ -63,7 +127,6 @@
   }
   .nav-btn:hover { background: var(--hover); }
   
-  /* 主題切換按鈕：兩個 SVG，由 data-theme 決定顯示哪一個 */
   .theme-btn {
     display: flex;
     align-items: center;

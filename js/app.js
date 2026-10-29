@@ -1,7 +1,7 @@
 'use strict';
 
 /*
- * 圖片日曆 — 最小可用版本（階段 6）+ 暗色模式（SVG 圖示）
+ * 圖片日曆 — 最小可用版本（階段 6）+ 暗色模式（SVG 圖示 + 全域同步過渡）
  * 依賴：store.js（IndexedDB + 圖片 Blob）、query.js（範圍查詢）、
  *       lib/recurrence.js（重複事件展開，可選）
  */
@@ -13,12 +13,14 @@ const $ = id => document.getElementById(id);
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const THEME_KEY = 'photo-calendar-theme';
+const THEME_TRANSITION_MS = 350; // 略大於 CSS 的 0.3s，確保過渡結束才移除 class
 
 let currentDate = new Date();
 let eventsInRange = [];
 let editingEventId = null;
 let pendingImageBlob = null;
 let imageUrlCache = new Map();
+let themeTransitionTimer = null;
 
 /* ========================= 啟動 ========================= */
 (async () => {
@@ -37,9 +39,27 @@ let imageUrlCache = new Map();
 });
 
 /* ========================= 主題 ========================= */
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  // 圖示由 CSS 依 data-theme 自動切換；這裡只更新 aria-label
+/**
+ * 套用主題。
+ * @param {'light'|'dark'} theme
+ * @param {{ animate?: boolean }} options
+ *   animate = true 時，給 <html> 加 .theme-transition，讓所有元素同步過渡；
+ *   過渡結束後自動移除，避免影響日常 hover 效能。
+ */
+function applyTheme(theme, { animate = true } = {}) {
+  const root = document.documentElement;
+  const changing = root.getAttribute('data-theme') !== theme;
+
+  if (animate && changing) {
+    root.classList.add('theme-transition');
+    clearTimeout(themeTransitionTimer);
+    themeTransitionTimer = setTimeout(() => {
+      root.classList.remove('theme-transition');
+    }, THEME_TRANSITION_MS);
+  }
+
+  root.setAttribute('data-theme', theme);
+
   const btn = $('btnTheme');
   if (btn) {
     btn.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
@@ -49,7 +69,8 @@ function applyTheme(theme) {
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
+  // 首次載入不做過渡：head 內聯腳本已設好 data-theme，避免一進頁面就閃
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'), { animate: false });
 
   $('btnTheme')?.addEventListener('click', () => {
     const curr = document.documentElement.getAttribute('data-theme');
