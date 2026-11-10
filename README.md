@@ -1,12 +1,10 @@
 # Img-Calendar
 
 [![License](https://img.shields.io/github/license/pig-ci/img-calendar?style=flat-square&color=blue)](https://github.com/pig-ci/img-calendar/blob/main/LICENSE)
-[![JavaScript](https://img.shields.io/badge/Language-JavaScript-f7df1e?style=flat-square&logo=javascript&logoColor=black)](https://github.com/pig-ci/img-calendar)
 [![GitHub Pages](https://img.shields.io/badge/Deploy-GitHub%20Pages-222222?style=flat-square&logo=github-pages&logoColor=white)](https://pig-ci.github.io/img-calendar/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Online-brightgreen?style=flat-square)](https://pig-ci.github.io/img-calendar/)
 [![Stars](https://img.shields.io/github/stars/pig-ci/img-calendar?style=flat-square&color=yellow)](https://github.com/pig-ci/img-calendar/stargazers)
 [![Forks](https://img.shields.io/github/forks/pig-ci/img-calendar?style=flat-square&color=blueviolet)](https://github.com/pig-ci/img-calendar/network/members)
-[![Last Commit](https://img.shields.io/github/last-commit/pig-ci/img-calendar?style=flat-square&color=orange)](https://github.com/pig-ci/img-calendar/commits/main)
 
 > 一個簡潔的網頁版圖片日曆，讓你在月曆檢視中輕鬆管理事件與對應圖片。
 
